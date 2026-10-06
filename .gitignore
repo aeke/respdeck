@@ -10,10 +10,11 @@ playwright-report/
 coverage/
 .DS_Store
 
-# Documentation belongs to this repository, even with a global docs ignore.
+# Keep assets and required license notices; exclude local Markdown reports.
 !docs/
 !docs/**
 docs/*.md
+!docs/THIRD-PARTY-NOTICES.md
 
 # Local AI assistant instructions and notes.
 **/AGENTS.md

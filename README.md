@@ -2,13 +2,18 @@
 <h1 align="center">RESPdeck</h1>
 <p align="center">A thoughtful workspace for your Redis data.</p>
 <p align="center">Self-hosted · Browser-based · TypeScript · MIT</p>
+<p align="center">
+  <a href="https://github.com/aeke/respdeck/actions/workflows/ci.yml"><img src="https://github.com/aeke/respdeck/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/aeke/respdeck/releases/tag/v0.1.0-rc.1"><img src="https://img.shields.io/badge/release-v0.1.0--rc.1-b6a5ff" alt="Release v0.1.0-rc.1"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7ac9b0" alt="MIT license"></a>
+</p>
 <p align="center"><a href="https://aeke.github.io/respdeck/">Website</a> · <a href="https://aeke.github.io/respdeck/demo/">Live demo</a></p>
 
 ![RESPdeck dark workspace](docs/screenshots/dark.png)
 
 Explore, understand, and shape your Redis data in a calm, modern interface. Run RESPdeck on your own infrastructure. No telemetry, external fonts, or third-party data services.
 
-**v0.1.0 is an initial release candidate.** Standalone Redis is supported. Cluster, Sentinel, SSH tunnels, RedisJSON modules, and multi-user access are on the roadmap.
+**[v0.1.0-rc.1](https://github.com/aeke/respdeck/releases/tag/v0.1.0-rc.1) is the first public release candidate.** Standalone Redis is supported. Cluster, Sentinel, SSH tunnels, RedisJSON modules, and multi-user access are on the roadmap.
 
 ## Features
 
@@ -142,3 +147,13 @@ python3 -m http.server 4174 --directory /tmp/respdeck-site
 Open http://localhost:4174/respdeck/. For a root-domain deployment, build with
 `PAGES_BASE_PATH=/ pnpm build:pages`; update the canonical and social metadata
 in `landing/index.html` to match your public URL.
+
+### Social preview
+
+`landing/assets/social-preview.png` is the shared 1280 × 640 social card used by
+the website and GitHub repository. The editable source is
+`landing/social-preview.html`. Regenerate it with `pnpm render:social` after
+installing Chromium with `pnpm exec playwright install chromium`. Upload the PNG
+under **Settings → General → Social preview** when the artwork changes.
+
+See [CHANGELOG.md](CHANGELOG.md) for release highlights and current scope.

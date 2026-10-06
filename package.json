@@ -22,7 +22,8 @@
     "format:check": "prettier --check .",
     "test:tls": "sh scripts/test-tls.sh",
     "benchmark": "tsx scripts/benchmark.ts",
-    "build:pages": "node scripts/build-pages.mjs"
+    "build:pages": "node scripts/build-pages.mjs",
+    "render:social": "node scripts/render-social.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

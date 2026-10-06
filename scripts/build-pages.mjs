@@ -40,6 +40,10 @@ for (const name of ['dark', 'light']) {
     resolve(output, `assets/${name}.png`),
   );
 }
+await copyFile(
+  resolve(root, 'landing/assets/social-preview.png'),
+  resolve(output, 'assets/social-preview.png'),
+);
 await copyFile(resolve(root, 'apps/web/public/favicon.svg'), resolve(output, 'assets/favicon.svg'));
 const require = createRequire(resolve(root, 'apps/web/package.json'));
 const fontRoot = dirname(require.resolve('@fontsource/inter/package.json'));

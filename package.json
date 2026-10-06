@@ -1,0 +1,41 @@
+{
+  "name": "respdeck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web 'pnpm --filter @respdeck/api dev' 'pnpm --filter @respdeck/web dev'",
+    "build": "pnpm --filter @respdeck/web build && pnpm --filter @respdeck/api build",
+    "start": "pnpm --filter @respdeck/api start",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:integration": "RUN_REDIS_TESTS=1 vitest run tests/redis.test.ts",
+    "test:e2e": "playwright test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "seed": "tsx scripts/seed.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:tls": "sh scripts/test-tls.sh",
+    "benchmark": "tsx scripts/benchmark.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^22.19.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "redis": "^6.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.50.0",
+    "vitest": "^5.0.3"
+  }
+}

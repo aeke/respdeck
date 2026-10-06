@@ -1,0 +1,22 @@
+services:
+  respdeck:
+    build: .
+    ports:
+      - '127.0.0.1:4310:4310'
+    environment:
+      RESPDECK_ADMIN_PASSWORD: ${RESPDECK_ADMIN_PASSWORD:-}
+      RESPDECK_ENCRYPTION_KEY: ${RESPDECK_ENCRYPTION_KEY:-}
+      RESPDECK_ORIGIN: ${RESPDECK_ORIGIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - respdeck-data:/app/data
+    restart: unless-stopped
+  redis:
+    image: redis:8.2-alpine
+    profiles: [redis]
+    volumes:
+      - redis-data:/data
+    command: [redis-server, --appendonly, 'yes']
+volumes:
+  respdeck-data:
+  redis-data:

@@ -1,0 +1,28 @@
+node_modules/
+.env
+.env.*
+!.env.example
+**/dist/
+data/
+*.sqlite*
+test-results/
+playwright-report/
+coverage/
+.DS_Store
+
+# Documentation belongs to this repository, even with a global docs ignore.
+!docs/
+!docs/**
+docs/*.md
+
+# Local AI assistant instructions and notes.
+**/AGENTS.md
+**/AGENTS.override.md
+**/CLAUDE.md
+**/GEMINI.md
+**/SKILL.md
+.claude/
+.codex/
+.cursor/
+.github/copilot-instructions.md
+.github/instructions/

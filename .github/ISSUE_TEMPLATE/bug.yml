@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a reproducible problem using synthetic data.
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Version, Redis version, setup and minimal steps. Do not include credentials or real data.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

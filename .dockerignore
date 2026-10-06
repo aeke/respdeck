@@ -1,0 +1,11 @@
+.git
+node_modules
+**/node_modules
+**/dist
+.env
+.env.*
+data
+test-results
+playwright-report
+coverage
+docs/screenshots

@@ -2,6 +2,7 @@
 <h1 align="center">RESPdeck</h1>
 <p align="center">A thoughtful workspace for your Redis data.</p>
 <p align="center">Self-hosted · Browser-based · TypeScript · MIT</p>
+<p align="center"><a href="https://aeke.github.io/respdeck/">Website</a> · <a href="https://aeke.github.io/respdeck/demo/">Live demo</a></p>
 
 ![RESPdeck dark workspace](docs/screenshots/dark.png)
 
@@ -116,3 +117,28 @@ Use `REDIS_TEST_PORT` to change the test port. `pnpm test:tls` starts an isolate
 ## License
 
 MIT © 2026 Abdullah EKE. RESPdeck is an independent project and is not affiliated with Redis Ltd. Redis is a trademark of Redis Ltd. Bundled Inter and JetBrains Mono fonts are distributed under the SIL Open Font License; see [third-party notices](docs/THIRD-PARTY-NOTICES.md).
+
+## Landing page and GitHub Pages
+
+The website lives in `landing/`. `pnpm build:pages` builds the landing page and a
+standalone sample-data demo into `landing/dist/`. The hosted demo makes no API
+requests and cannot connect to real Redis servers. The self-hosted application
+continues to use its normal backend.
+
+The `Deploy GitHub Pages` workflow publishes this directory on relevant pushes
+to `main` or through **Actions → Deploy GitHub Pages → Run workflow**. Set
+**Settings → Pages → Source → GitHub Actions** before the first deployment.
+The expected URL is https://aeke.github.io/respdeck/.
+
+For a local preview with the same repository path:
+
+```sh
+pnpm build:pages
+mkdir -p /tmp/respdeck-site/respdeck
+cp -R landing/dist/. /tmp/respdeck-site/respdeck/
+python3 -m http.server 4174 --directory /tmp/respdeck-site
+```
+
+Open http://localhost:4174/respdeck/. For a root-domain deployment, build with
+`PAGES_BASE_PATH=/ pnpm build:pages`; update the canonical and social metadata
+in `landing/index.html` to match your public URL.

@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import type { Accent, Connection, KeySummary, KeyType, Session, Theme } from '@respdeck/contracts';
 import { keyTypes } from '@respdeck/contracts';
-import { auth, connections, workspace } from './api';
+import { auth, connections, workspace, demoOnly } from './api';
 import { demoConnections } from './demo';
 import { encode, patternFor, size, ttlLabel } from './utils';
 import { Dialog, FormError } from './components/Dialog';
@@ -1215,15 +1215,46 @@ export default function App() {
       )}
       {modal === 'login' && (
         <Dialog
-          title={session.configured ? 'Unlock your workspace' : 'Enable real connections'}
+          title={
+            demoOnly
+              ? 'Make it your workspace'
+              : session.configured
+                ? 'Unlock your workspace'
+                : 'Enable real connections'
+          }
           description={
-            session.configured
-              ? 'Sign in with your administrator password.'
-              : 'The demo is ready. Configure your self-hosted server to connect Redis.'
+            demoOnly
+              ? 'This hosted demo uses sample data. Self-host RESPdeck to connect your Redis.'
+              : session.configured
+                ? 'Sign in with your administrator password.'
+                : 'The demo is ready. Configure your self-hosted server to connect Redis.'
           }
           onClose={() => setModal('')}
         >
-          {session.configured ? (
+          {demoOnly ? (
+            <>
+              <div className="setup-icon">
+                <ShieldCheck size={28} />
+              </div>
+              <p>
+                Explore all six data types, edit sample keys, and try the themes. Demo edits reset
+                when you reload. No real Redis credentials are needed here.
+              </p>
+              <div className="dialog-actions">
+                <a
+                  className="button primary"
+                  href="https://github.com/aeke/respdeck#quick-start"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Self-host RESPdeck <ExternalLink size={14} />
+                </a>
+                <button className="button" onClick={() => setModal('')}>
+                  Keep exploring
+                </button>
+              </div>
+            </>
+          ) : session.configured ? (
             <form
               onSubmit={async (e) => {
                 e.preventDefault();

@@ -9,6 +9,7 @@ import type {
   Session,
 } from '@respdeck/contracts';
 import { demo } from './demo';
+export const demoOnly = import.meta.env.VITE_DEMO_ONLY === 'true';
 let csrfToken = '';
 export class RequestError extends Error {
   constructor(
@@ -24,6 +25,12 @@ export async function request<T>(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
+  if (demoOnly) {
+    throw new RequestError(
+      'DEMO_ONLY',
+      'This hosted demo uses sample data. Self-host RESPdeck to connect your Redis server.',
+    );
+  }
   const response = await fetch(`/api/v1${path}`, {
     method,
     signal,
@@ -44,6 +51,7 @@ export async function request<T>(
 }
 export const auth = {
   async session() {
+    if (demoOnly) return { configured: false, authenticated: false, encryptionEnabled: false };
     const s = await request<Session>('/session');
     csrfToken = s.csrfToken ?? '';
     return s;

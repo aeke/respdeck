@@ -56,15 +56,14 @@ Use host `redis`, port `6379` in the connection form. A Redis server on your hos
 
 ### Deploying with Coolify
 
-These steps target Coolify's current Docker Compose interface. Labels may change between Coolify releases.
+Use the repository Dockerfile; its multi-stage build needs the repository as the build context. In Coolify, select the **Dockerfile** build pack, set the repository root as **Base Directory**, and use `Dockerfile` as **Dockerfile Location**.
 
-1. Create an application from the Git repository using the **Dockerfile** build pack. Set **Base Directory** to the repository root.
-2. Set the container port to `4310` and assign your domain in Coolify. The API listens on `0.0.0.0:4310` and the image health check uses `/health`.
-3. Set `RESPDECK_ADMIN_PASSWORD` to a strong password of at least 12 characters, `RESPDECK_ORIGIN` to the exact public origin (for example `https://respdeck.example.com`), and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Keep these values in Coolify's environment settings, not in Git.
-4. Persist `/app/data` using a Coolify persistent storage mount. The runtime runs as the unprivileged `node` user, so ensure the mounted directory is writable by that user (UID 1000). Do not mount a root-owned, non-writable directory there.
-5. Deploy, then verify `https://respdeck.example.com/health` and sign in to the application.
+1. Under the application configuration, set **Ports Exposes** to `4310`, assign your domain, and enable HTTPS. The server listens on `0.0.0.0:4310`; the image health check uses `/health`.
+2. Set `RESPDECK_ADMIN_PASSWORD` to a strong password of at least 12 characters, `RESPDECK_ORIGIN` to the exact public origin (for example `https://respdeck.example.com`), and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Keep these values in Coolify's environment settings, not in Git.
+3. Under **Persistent Storage**, choose **Add → Volume Mount** and set **Destination Path** to `/app/data`. Leave **Source Path** empty to let Docker manage the volume. Save the mount and redeploy. The image runs as the unprivileged `node` user; the mount must be writable by UID 1000.
+4. Verify `https://respdeck.example.com/health` and sign in. Back up the persistent data volume and encryption key.
 
-Do not expose the service without HTTPS. `RESPDECK_ORIGIN` must match the browser-facing origin; incorrect origin or cookie settings can prevent sign-in. Back up the persistent data volume and encryption key before removing or replacing storage.
+Do not expose the service without HTTPS. `RESPDECK_ORIGIN` must match the browser-facing origin; incorrect origin or cookie settings can prevent sign-in.
 
 ### Development
 

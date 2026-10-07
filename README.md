@@ -56,15 +56,15 @@ Use host `redis`, port `6379` in the connection form. A Redis server on your hos
 
 ### Deploying with Coolify
 
-These steps target the current Coolify interface. Coolify releases can change labels and defaults; use the equivalent setting if a label differs.
+These steps target Coolify's current Docker Compose interface. Labels may change between Coolify releases.
 
-1. In Coolify, create a **Docker Compose** resource and connect the Git repository containing RESPdeck. Select the branch to deploy and set the base directory to the repository root.
-2. Set the Compose file path to `docker-compose.yml` and configure the resource to expose container port `4310` on the domain assigned by Coolify. Enable HTTPS for that domain.
-3. Add the required environment variables in the resource settings: `RESPDECK_ADMIN_PASSWORD` (at least 12 characters), `RESPDECK_ORIGIN` (the exact public HTTPS origin, e.g. `https://respdeck.example.com`) and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Do not commit these secrets to Git.
-4. Ensure the Compose service's `/data` directory is stored in a persistent volume so SQLite data survives redeployments. Keep a backup of that volume and the encryption key.
-5. Deploy the resource, then check its health endpoint at `https://respdeck.example.com/health` and open the application. Configure Redis connections from the UI.
+1. Create an application from the Git repository using the **Docker Compose** build pack. Set **Base Directory** to the repository root and **Docker Compose Location** to `compose.yaml`.
+2. In the `respdeck` service's **Domains** field, enter `https://respdeck.example.com:4310` (replace the hostname with your domain). The `:4310` suffix tells Coolify's proxy which internal container port to route to. For Coolify proxy access, the service must listen on the container network interface and the Compose service must not bind the published port to `127.0.0.1`. This repository's default `compose.yaml` binds to localhost; change the port mapping to `4310:4310` for Coolify deployment, then redeploy.
+3. Set `RESPDECK_ADMIN_PASSWORD` to a strong password of at least 12 characters, `RESPDECK_ORIGIN` to the exact public origin without a port (for example `https://respdeck.example.com`), and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Keep these values in Coolify's environment settings, not in Git.
+4. Keep the `respdeck-data` named volume persistent; it stores application data under `/app/data`. Back up the volume and encryption key.
+5. Deploy, then verify `https://respdeck.example.com/health` and sign in to the application.
 
-Do not publish the service directly without HTTPS. Set `RESPDECK_ORIGIN` to the browser-facing origin, not an internal Coolify URL; incorrect origin or cookie settings can prevent sign-in. Back up the persistent data before changing or removing the volume.
+Do not expose the service without HTTPS. `RESPDECK_ORIGIN` must match the browser-facing origin; incorrect origin or cookie settings can prevent sign-in. Do not remove the data volume without a backup.
 
 ### Development
 

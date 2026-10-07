@@ -70,9 +70,14 @@ export interface ServerSummary {
   keys: number;
   databases: number[];
 }
+export interface SetupInput {
+  setupCode: string;
+  password: string;
+}
 export interface Session {
   configured: boolean;
   authenticated: boolean;
+  onboardingComplete: boolean;
   csrfToken?: string;
   encryptionEnabled: boolean;
 }

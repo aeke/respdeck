@@ -34,17 +34,11 @@ Explore, understand, and shape your Redis data in a calm, modern interface. Run 
 docker compose up --build -d
 ```
 
-Open **http://localhost:4310**. The demo works immediately.
+Open **http://localhost:4310**. The first visit presents a setup wizard. Read the one-time code from the application logs, create an administrator password, then optionally test and save a Redis connection or skip.
 
-To connect a real Redis server, copy `.env.example` to `.env` and set a strong administrator password (at least 12 characters). Optionally generate a 32-byte credential encryption key with `openssl rand -base64 32`, put it in `RESPDECK_ENCRYPTION_KEY`, and recreate the container:
+The password is stored in the data volume. No administrator password environment variable is used. A Redis encryption key is generated and persisted automatically; an existing `RESPDECK_ENCRYPTION_KEY` can be retained for deployments that already use one.
 
-```sh
-cp .env.example .env
-# Edit .env, then:
-docker compose up --build -d
-```
-
-Click **New connection**, sign in, and enter your Redis endpoint. Connections default to read-only; uncheck that option to enable editing.
+After onboarding, click **Add connection** to save additional Redis endpoints. Connections default to read-only; uncheck that option to enable editing.
 
 You can also launch an isolated Redis alongside RESPdeck:
 
@@ -59,9 +53,9 @@ Use host `redis`, port `6379` in the connection form. A Redis server on your hos
 Use the repository Dockerfile; its multi-stage build needs the repository as the build context. In Coolify, select the **Dockerfile** build pack, set the repository root as **Base Directory**, and use `Dockerfile` as **Dockerfile Location**.
 
 1. Under the application configuration, set **Ports Exposes** to `4310`, assign your domain, and enable HTTPS. The server listens on `0.0.0.0:4310`; the image health check uses `/health`.
-2. Set `RESPDECK_ADMIN_PASSWORD` to a strong password of at least 12 characters, `RESPDECK_ORIGIN` to the exact public origin (for example `https://respdeck.example.com`), and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Keep these values in Coolify's environment settings, not in Git.
+2. Set `RESPDECK_ORIGIN` to the exact public origin (for example `https://respdeck.example.com`) and `COOKIE_SECURE=true`. The first visit opens a setup wizard; read the one-time setup code from the application logs and choose an administrator password of at least 12 characters. Optionally set `RESPDECK_ENCRYPTION_KEY` to an existing 32-byte key (`openssl rand -base64 32`); new installations generate and persist a key automatically.
 3. Under **Persistent Storage**, choose **Add → Volume Mount** and set **Destination Path** to `/app/data`. Leave **Source Path** empty to let Docker manage the volume. Save the mount and redeploy. The image runs as the unprivileged `node` user; the mount must be writable by UID 1000.
-4. Verify `https://respdeck.example.com/health` and sign in. Back up the persistent data volume and encryption key.
+4. Verify `https://respdeck.example.com/health` and complete first-run setup. Back up the persistent data volume as a unit, including `respdeck.sqlite` and `encryption.key`.
 
 Do not expose the service without HTTPS. `RESPDECK_ORIGIN` must match the browser-facing origin; incorrect origin or cookie settings can prevent sign-in.
 
@@ -86,10 +80,10 @@ The production server serves the built UI and API at **http://127.0.0.1:4310**.
 
 ## Security and data behavior
 
-- Real Redis endpoints are disabled until an administrator password is configured. One administrator session is supported; signing in invalidates the previous session. Sessions expire after eight hours.
+- Real Redis endpoints remain disabled until the first-run wizard creates the administrator. One administrator session is supported; signing in invalidates the previous session. Sessions expire after eight hours.
 - Redis connections are opened by the backend, never directly by the browser. Only trusted administrators should have access to this tool.
 - Session cookies are HttpOnly and SameSite Strict. Writes require an allowed Origin and session CSRF token. Sign-in is rate limited.
-- Saved passwords use AES-256-GCM if an encryption key is configured. Without one, they remain in server memory and are cleared on sign-out, expiry, or restart. Connection names, hosts and CA certificates are saved in SQLite.
+- Saved passwords use AES-256-GCM with the persistent `<dataDir>/encryption.key`. Connection names, hosts and CA certificates are saved in SQLite.
 - Back up both the data volume and the encryption key. Losing the key requires re-entering saved Redis passwords. Passwords and key values are not logged.
 - For remote access, put RESPdeck behind an HTTPS reverse proxy, set `RESPDECK_ORIGIN=https://your-host`, and set `COOKIE_SECURE=true`. The Docker example binds the published port to localhost.
 - New key names are limited to 4096 UTF-8 bytes. Values and collection pages are limited to 1 MiB. Oversized strings are previewed and cannot be edited; binary strings are shown as hex and cannot be edited. Binary collection entries are shown but cannot be edited in the UI. Key-level TTL/delete operations remain available on writable connections.

@@ -1,10 +1,10 @@
-import Fastify, { LogController } from 'fastify';
+import Fastify, { LogController, type FastifyReply } from 'fastify';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import staticFiles from '@fastify/static';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -13,14 +13,20 @@ import { Store } from './store.js';
 import { RedisService, keyBuffer } from './redis.js';
 import { AppError, translateError } from './errors.js';
 
+const scryptAsync = (password: string, salt: Buffer) =>
+  new Promise<Buffer>((resolve, reject) =>
+    scrypt(password, salt, 32, { N: 16384, r: 8, p: 1 }, (error, key) =>
+      error ? reject(error) : resolve(key),
+    ),
+  );
 export interface AppOptions {
   dataDir?: string;
-  password?: string;
   encryptionKey?: string;
   origin?: string;
   secureCookie?: boolean;
   webDir?: string;
   logger?: boolean;
+  onSetupCode?: (code: string) => void;
 }
 const connectionSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -104,11 +110,13 @@ export async function buildApp(options: AppOptions = {}) {
   });
   const store = new Store(options.dataDir ?? resolve('data'), options.encryptionKey);
   const redis = new RedisService(store);
-  const salt = randomBytes(16),
-    passwordHash = options.password ? scryptSync(options.password, salt, 32) : null;
-  if (options.password && options.password.length < 12)
-    throw new Error('RESPDECK_ADMIN_PASSWORD must contain at least 12 characters.');
   const sessions = new Map<string, { csrf: string; expires: number }>();
+  let setupDigest: Buffer | undefined;
+  if (!store.getAdministrator()) {
+    const code = randomBytes(32).toString('base64url');
+    setupDigest = createHash('sha256').update(code).digest();
+    (options.onSetupCode ?? ((value) => app.log.warn(`RESPdeck setup code: ${value}`)))(code);
+  }
   const getSession = (token?: string) => {
     if (!token) return;
     const s = sessions.get(token);
@@ -122,10 +130,7 @@ export async function buildApp(options: AppOptions = {}) {
   const pruneSessions = setInterval(() => {
     for (const [token, session] of sessions)
       if (session.expires < Date.now()) sessions.delete(token);
-    if (!sessions.size) {
-      store.clearSessionSecrets();
-      void redis.disconnect();
-    }
+    if (!sessions.size) void redis.disconnect();
   }, 60000);
   pruneSessions.unref();
   await app.register(cookie);
@@ -161,20 +166,18 @@ export async function buildApp(options: AppOptions = {}) {
           throw new AppError(403, 'ORIGIN_REJECTED', 'Request origin is not allowed.');
       }
       const publicRoute = req.url.split('?')[0];
-      if (publicRoute === '/api/v1/session' || publicRoute === '/api/v1/login') return;
-      if (!passwordHash)
-        throw new AppError(
-          503,
-          'ADMIN_NOT_CONFIGURED',
-          'Set RESPDECK_ADMIN_PASSWORD on the server to enable real connections.',
-        );
+      if (
+        publicRoute === '/api/v1/session' ||
+        publicRoute === '/api/v1/login' ||
+        publicRoute === '/api/v1/setup'
+      )
+        return;
+      if (!store.getAdministrator())
+        throw new AppError(503, 'ADMIN_NOT_CONFIGURED', 'Complete first-run setup to enable real connections.');
       const session = getSession(req.cookies.respdeck_session);
       if (!session)
         throw new AppError(401, 'UNAUTHENTICATED', 'Sign in to access your Redis connections.');
-      if (
-        !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
-        req.headers['x-csrf-token'] !== session.csrf
-      )
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers['x-csrf-token'] !== session.csrf)
         throw new AppError(403, 'CSRF_REJECTED', 'Your session changed. Sign in again.');
     }
   });
@@ -191,52 +194,71 @@ export async function buildApp(options: AppOptions = {}) {
   app.get('/health', async () => ({ status: 'ok', version: '0.1.0' }));
   app.get('/api/v1/session', async (req) => {
     const s = getSession(req.cookies.respdeck_session);
+    const administrator = store.getAdministrator();
     return {
-      configured: !!passwordHash,
+      configured: !!administrator,
       authenticated: !!s,
+      onboardingComplete: administrator?.onboardingComplete ?? false,
       csrfToken: s?.csrf,
       encryptionEnabled: store.encryptionEnabled,
     };
   });
-  app.post(
-    '/api/v1/login',
-    {
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
-      schema: { body: json(z.object({ password: z.string().max(4096) })) },
-    },
-    async (req, reply) => {
-      if (!passwordHash)
-        throw new AppError(
-          503,
-          'ADMIN_NOT_CONFIGURED',
-          'Set RESPDECK_ADMIN_PASSWORD on the server to enable real connections.',
-        );
-      const candidate = scryptSync((req.body as { password: string }).password, salt, 32);
-      if (!timingSafeEqual(candidate, passwordHash))
-        throw new AppError(401, 'INVALID_PASSWORD', 'Incorrect administrator password.');
-      sessions.clear();
-      await redis.disconnect();
-      const token = randomBytes(32).toString('base64url'),
-        csrf = randomBytes(32).toString('base64url');
-      sessions.set(token, { csrf, expires: Date.now() + 8 * 3600_000 });
-      reply.setCookie('respdeck_session', token, {
-        httpOnly: true,
-        sameSite: 'strict',
-        secure: options.secureCookie ?? false,
-        path: '/',
-        maxAge: 8 * 3600,
-      });
-      return {
-        configured: true,
-        authenticated: true,
-        csrfToken: csrf,
-        encryptionEnabled: store.encryptionEnabled,
-      };
-    },
-  );
+  const issueSession = async (reply: FastifyReply, onboardingComplete: boolean) => {
+    sessions.clear();
+    await redis.disconnect();
+    const token = randomBytes(32).toString('base64url');
+    const csrf = randomBytes(32).toString('base64url');
+    sessions.set(token, { csrf, expires: Date.now() + 8 * 3600_000 });
+    reply.setCookie('respdeck_session', token, {
+      httpOnly: true, sameSite: 'strict', secure: options.secureCookie ?? false, path: '/', maxAge: 8 * 3600,
+    });
+    return { configured: true, authenticated: true, onboardingComplete, csrfToken: csrf, encryptionEnabled: store.encryptionEnabled };
+  };
+  const setupSchema = z.object({
+    setupCode: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    password: z.string().min(12).max(4096),
+  }).strict();
+  app.post('/api/v1/setup', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    schema: { body: json(setupSchema) },
+  }, async (req, reply) => {
+    if (store.getAdministrator()) throw new AppError(409, 'SETUP_ALREADY_COMPLETED', 'Administrator setup has already been completed.');
+    const body = setupSchema.parse(req.body);
+    const candidate = createHash('sha256').update(body.setupCode).digest();
+    if (!setupDigest || !timingSafeEqual(candidate, setupDigest))
+      throw new AppError(403, 'INVALID_SETUP_CODE', 'The setup code is invalid.');
+    const salt = randomBytes(16);
+    const hash = await scryptAsync(body.password, salt);
+    if (!store.createAdministrator(salt.toString('base64'), hash.toString('base64')))
+      throw new AppError(409, 'SETUP_ALREADY_COMPLETED', 'Administrator setup has already been completed.');
+    setupDigest = undefined;
+    return issueSession(reply, false);
+  });
+  const loginSchema = z.object({ password: z.string().max(4096) });
+  app.post('/api/v1/login', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    schema: { body: json(loginSchema) },
+  }, async (req, reply) => {
+    const administrator = store.getAdministrator();
+    if (!administrator)
+      throw new AppError(503, 'ADMIN_NOT_CONFIGURED', 'Complete first-run setup to enable real connections.');
+    const body = loginSchema.parse(req.body);
+    const candidate = await scryptAsync(body.password, Buffer.from(administrator.salt, 'base64'));
+    const expected = Buffer.from(administrator.passwordHash, 'base64');
+    if (!timingSafeEqual(candidate, expected))
+      throw new AppError(401, 'INVALID_PASSWORD', 'Incorrect administrator password.');
+    return issueSession(reply, administrator.onboardingComplete);
+  });
+  app.post('/api/v1/setup/complete', { schema: { body: json(z.object({}).strict()) } }, async (req) => {
+    store.completeOnboarding();
+    const administrator = store.getAdministrator()!;
+    return {
+      configured: true, authenticated: true, onboardingComplete: administrator.onboardingComplete,
+      csrfToken: getSession(req.cookies.respdeck_session)?.csrf, encryptionEnabled: store.encryptionEnabled,
+    };
+  });
   app.post('/api/v1/logout', async (_req, reply) => {
     sessions.clear();
-    store.clearSessionSecrets();
     await redis.disconnect();
     reply.clearCookie('respdeck_session', { path: '/' });
     return { ok: true };

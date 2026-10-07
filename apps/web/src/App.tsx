@@ -46,11 +46,20 @@ import { encode, patternFor, size, ttlLabel } from './utils';
 import { Dialog, FormError } from './components/Dialog';
 import { ConnectionDialog } from './components/ConnectionDialog';
 import { KeyEditor, TypeBadge } from './components/KeyEditor';
+import {
+  EmptyConnections,
+  ErrorScreen,
+  LoadingScreen,
+  LoginScreen,
+  OnboardingStep,
+  SetupStep,
+} from './components/SetupWizard';
 
 const emptySession: Session = {
   configured: false,
   authenticated: false,
   encryptionEnabled: false,
+  onboardingComplete: false,
 };
 type View = 'browser' | 'overview' | 'settings';
 function Sparkline({ values, className = '' }: { values: number[]; className?: string }) {
@@ -81,8 +90,19 @@ function Sparkline({ values, className = '' }: { values: number[]; className?: s
     </svg>
   );
 }
-export default function App() {
+function Workspace({
+  mode,
+  session,
+  connectionList,
+  onSignOut,
+}: {
+  mode: 'demo' | 'real';
+  session: Session;
+  connectionList: Connection[];
+  onSignOut: () => Promise<void>;
+}) {
   const client = useQueryClient();
+  const isDemo = mode === 'demo';
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('respdeck-theme') as Theme) || 'dark',
   );
@@ -90,7 +110,7 @@ export default function App() {
     () => (localStorage.getItem('respdeck-accent') as Accent) || 'violet',
   );
   const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>('dark');
-  const [active, setActive] = useState(demoConnections[0]),
+  const [active, setActive] = useState(connectionList[0]),
     [db, setDb] = useState(0),
     [view, setView] = useState<View>('browser');
   const [search, setSearch] = useState(''),
@@ -98,14 +118,13 @@ export default function App() {
     [type, setType] = useState(''),
     [tree, setTree] = useState(false),
     [collapsed, setCollapsed] = useState<string[]>([]);
-  const [tabs, setTabs] = useState<{ id: string; name: string }[]>([
-      { id: encode('users:1001'), name: 'users:1001' },
-    ]),
-    [selected, setSelected] = useState<string | null>(encode('users:1001'));
+  const [tabs, setTabs] = useState<{ id: string; name: string }[]>(
+      isDemo ? [{ id: encode('users:1001'), name: 'users:1001' }] : [],
+    ),
+    [selected, setSelected] = useState<string | null>(isDemo ? encode('users:1001') : null);
   const [dirtyWorkspace, setDirtyWorkspace] = useState(false);
   const [modal, setModal] = useState(''),
     [editingConnection, setEditingConnection] = useState<Connection>(),
-    [loginPassword, setLoginPassword] = useState(''),
     [formError, setFormError] = useState(''),
     [busy, setBusy] = useState(false);
   const [newName, setNewName] = useState(''),
@@ -121,21 +140,8 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined),
     listRef = useRef<HTMLDivElement>(null),
     searchRef = useRef<HTMLInputElement>(null);
-  const sessionQuery = useQuery({
-    queryKey: ['session'],
-    queryFn: auth.session,
-  });
-  const session = sessionQuery.data ?? emptySession;
-  const realConnections = useQuery({
-    queryKey: ['connections'],
-    queryFn: connections.list,
-    enabled: session.authenticated,
-  });
-  const allConnections = [
-    ...demoConnections,
-    ...(session.authenticated ? (realConnections.data ?? []) : []),
-  ];
-  const isDemo = active.id.startsWith('demo-');
+  const allConnections = connectionList;
+  
   const api = workspace(active.id, db);
   const summary = useQuery({
     queryKey: ['summary', active.id, db],
@@ -285,7 +291,10 @@ export default function App() {
   };
   const addConnection = () => {
     setEditingConnection(undefined);
-    openModal(session.authenticated ? 'connection' : 'login');
+    if (isDemo) openModal('login');
+    else {
+      openModal('connection');
+    }
   };
   const refreshKeys = async () => {
     await client.resetQueries({ queryKey: ['keys', active.id, db] });
@@ -322,16 +331,9 @@ export default function App() {
     window.addEventListener('pointerup', end);
   };
   useEffect(() => {
-    const expired = () => {
-      client.setQueryData(['session'], { ...emptySession, configured: true });
-      client.removeQueries({ queryKey: ['connections'] });
-      switchConnection(demoConnections[0], true);
-      setModal('login');
-      notify('Your administrator session expired. Sign in again.', true);
-    };
-    window.addEventListener('respdeck-session-expired', expired);
-    return () => window.removeEventListener('respdeck-session-expired', expired);
-  }, [client, active.id]);
+    if (!allConnections.some((c) => c.id === active.id) && allConnections.length > 0)
+      switchConnection(allConnections[0], true);
+  }, [allConnections, active.id]);
   const metricOps = isDemo
     ? [28, 32, 27, 45, 42, 30, 38, 52, 40, 58, 45, 48, 68, 53, 60, 72, 64, 82]
     : opsHistory;
@@ -1101,12 +1103,12 @@ export default function App() {
                 </div>
                 <div className="settings-info">
                   <span>Administrator session</span>
-                  <strong>{session.authenticated ? 'Signed in' : 'Demo mode'}</strong>
+                  <strong>{isDemo ? 'Demo mode' : 'Signed in'}</strong>
                 </div>
                 <div className="settings-info">
                   <span>Saved credentials</span>
                   <strong>
-                    {session.encryptionEnabled ? 'Encrypted at rest' : 'Session memory only'}
+                    {isDemo || !session.encryptionEnabled ? 'Demo data only' : 'Encrypted at rest'}
                   </strong>
                 </div>
                 <div className="settings-info">
@@ -1122,18 +1124,12 @@ export default function App() {
                     <Plus size={15} />
                     Add connection
                   </button>
-                  {session.authenticated && (
+                  {!isDemo && (
                     <button
                       className="button"
                       onClick={async () => {
                         try {
-                          await auth.logout();
-                          client.removeQueries({ queryKey: ['connections'] });
-                          switchConnection(demoConnections[0], true);
-                          await client.invalidateQueries({
-                            queryKey: ['session'],
-                          });
-                          notify('Signed out. Session passwords cleared.');
+                          await onSignOut();
                         } catch (e) {
                           notify((e as Error).message, true);
                         }
@@ -1195,7 +1191,6 @@ export default function App() {
       {modal === 'connection' && (
         <ConnectionDialog
           existing={editingConnection}
-          session={session}
           onClose={() => setModal('')}
           onSaved={(c) => {
             void client.invalidateQueries({ queryKey: ['connections'] });
@@ -1208,110 +1203,38 @@ export default function App() {
           onRemoved={() => {
             void client.invalidateQueries({ queryKey: ['connections'] });
             setModal('');
-            switchConnection(demoConnections[0]);
+            const next = allConnections.find((c) => c.id !== active.id);
+            if (next) switchConnection(next, true);
             notify('Connection removed.');
           }}
         />
       )}
       {modal === 'login' && (
         <Dialog
-          title={
-            demoOnly
-              ? 'Make it your workspace'
-              : session.configured
-                ? 'Unlock your workspace'
-                : 'Enable real connections'
-          }
-          description={
-            demoOnly
-              ? 'This hosted demo uses sample data. Self-host RESPdeck to connect your Redis.'
-              : session.configured
-                ? 'Sign in with your administrator password.'
-                : 'The demo is ready. Configure your self-hosted server to connect Redis.'
-          }
+          title="Make it your workspace"
+          description="This hosted demo uses sample data. Self-host RESPdeck to connect your Redis."
           onClose={() => setModal('')}
         >
-          {demoOnly ? (
-            <>
-              <div className="setup-icon">
-                <ShieldCheck size={28} />
-              </div>
-              <p>
-                Explore all six data types, edit sample keys, and try the themes. Demo edits reset
-                when you reload. No real Redis credentials are needed here.
-              </p>
-              <div className="dialog-actions">
-                <a
-                  className="button primary"
-                  href="https://github.com/aeke/respdeck#quick-start"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Self-host RESPdeck <ExternalLink size={14} />
-                </a>
-                <button className="button" onClick={() => setModal('')}>
-                  Keep exploring
-                </button>
-              </div>
-            </>
-          ) : session.configured ? (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setBusy(true);
-                setFormError('');
-                try {
-                  const s = await auth.login(loginPassword);
-                  client.setQueryData(['session'], s);
-                  setLoginPassword('');
-                  setModal('connection');
-                } catch (e) {
-                  setFormError((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
+          <div className="setup-icon">
+            <ShieldCheck size={28} />
+          </div>
+          <p>
+            Explore all six data types, edit sample keys, and try the themes. Demo edits reset when
+            you reload. No real Redis credentials are needed here.
+          </p>
+          <div className="dialog-actions">
+            <a
+              className="button primary"
+              href="https://github.com/aeke/respdeck#quick-start"
+              target="_blank"
+              rel="noreferrer"
             >
-              <label className="field">
-                Administrator password
-                <input
-                  type="password"
-                  required
-                  autoFocus
-                  autoComplete="current-password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                />
-              </label>
-              <FormError message={formError} />
-              <div className="dialog-actions">
-                <button className="button primary" disabled={busy}>
-                  {busy ? <Loader2 size={14} className="spin" /> : <LockKeyhole size={14} />}
-                  Sign in
-                </button>
-              </div>
-            </form>
-          ) : (
-            <>
-              <div className="setup-icon">
-                <ShieldCheck size={28} />
-              </div>
-              <p>
-                Add an administrator password of at least 12 characters to your server’s{' '}
-                <code>.env</code> file, then restart RESPdeck.
-              </p>
-              <pre className="setup-code">RESPDECK_ADMIN_PASSWORD=your-strong-password</pre>
-              <p className="form-hint">
-                For Docker, set the same environment variable in your Compose configuration. You can
-                keep exploring the demo while you set things up.
-              </p>
-              <div className="dialog-actions">
-                <button className="button primary" onClick={() => setModal('')}>
-                  Back to workspace
-                </button>
-              </div>
-            </>
-          )}
+              Self-host RESPdeck <ExternalLink size={14} />
+            </a>
+            <button className="button" onClick={() => setModal('')}>
+              Keep exploring
+            </button>
+          </div>
         </Dialog>
       )}
       {modal === 'create' && (
@@ -1555,5 +1478,123 @@ export default function App() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  const client = useQueryClient();
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    const t = localStorage.getItem('respdeck-theme') || 'dark',
+      a = localStorage.getItem('respdeck-accent') || 'violet';
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      document.documentElement.dataset.theme =
+        t === 'system' ? (media.matches ? 'dark' : 'light') : t;
+      document.documentElement.dataset.accent = a;
+    };
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, []);
+  const sessionQuery = useQuery({ queryKey: ['session'], queryFn: auth.session, enabled: !demoOnly });
+  const session = sessionQuery.data;
+  const clearPrivate = async () => {
+    await client.cancelQueries();
+    client.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' });
+  };
+  const signOut = async () => {
+    await auth.logout();
+    await clearPrivate();
+    setNotice('');
+    client.setQueryData<Session>(['session'], (prev) => ({
+      configured: true,
+      authenticated: false,
+      encryptionEnabled: prev?.encryptionEnabled ?? false,
+      onboardingComplete: prev?.onboardingComplete ?? true,
+    }));
+  };
+  useEffect(() => {
+    if (demoOnly) return;
+    const expired = () => {
+      void clearPrivate();
+      client.setQueryData<Session>(['session'], (prev) => ({
+        configured: true,
+        authenticated: false,
+        encryptionEnabled: prev?.encryptionEnabled ?? false,
+        onboardingComplete: prev?.onboardingComplete ?? true,
+      }));
+      setNotice('Your administrator session expired. Sign in again.');
+    };
+    window.addEventListener('respdeck-session-expired', expired);
+    return () => window.removeEventListener('respdeck-session-expired', expired);
+  }, [client]);
+  const authenticated = !demoOnly && !!session?.authenticated && session.onboardingComplete;
+  const realConnections = useQuery({
+    queryKey: ['connections'],
+    queryFn: connections.list,
+    enabled: authenticated,
+  });
+  const [adding, setAdding] = useState(false);
+  const setSession = (s: Session) => {
+    setNotice('');
+    client.setQueryData(['session'], s);
+  };
+  if (demoOnly)
+    return (
+      <Workspace
+        mode="demo"
+        session={emptySession}
+        connectionList={demoConnections}
+        onSignOut={async () => undefined}
+      />
+    );
+  if (sessionQuery.isError)
+    return (
+      <ErrorScreen message={sessionQuery.error.message} onRetry={() => void sessionQuery.refetch()} />
+    );
+  if (!session) return <LoadingScreen />;
+  if (!session.configured)
+    return (
+      <SetupStep
+        onDone={setSession}
+        onAlreadyConfigured={() => void client.invalidateQueries({ queryKey: ['session'] })}
+      />
+    );
+  if (!session.authenticated) return <LoginScreen notice={notice} onDone={setSession} />;
+  if (!session.onboardingComplete)
+    return <OnboardingStep onDone={setSession} onSignOut={() => void signOut()} />;
+  if (realConnections.isError)
+    return (
+      <ErrorScreen
+        message={realConnections.error.message}
+        onRetry={() => void realConnections.refetch()}
+      />
+    );
+  if (!realConnections.data) return <LoadingScreen />;
+  if (realConnections.data.length === 0) {
+    return (
+      <>
+        <EmptyConnections onAdd={() => setAdding(true)} onSignOut={() => void signOut()} />
+        {adding && (
+          <ConnectionDialog
+            onClose={() => setAdding(false)}
+            onSaved={() => {
+              setAdding(false);
+              void client.invalidateQueries({ queryKey: ['connections'] });
+            }}
+            onRemoved={() => undefined}
+          />
+        )}
+      </>
+    );
+  }
+  return (
+    <Workspace
+      mode="real"
+      session={session}
+      connectionList={realConnections.data}
+      onSignOut={signOut}
+    />
   );
 }

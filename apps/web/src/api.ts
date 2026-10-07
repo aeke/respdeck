@@ -7,6 +7,7 @@ import type {
   ScanPage,
   ServerSummary,
   Session,
+  SetupInput,
 } from '@respdeck/contracts';
 import { demo } from './demo';
 export const demoOnly = import.meta.env.VITE_DEMO_ONLY === 'true';
@@ -51,9 +52,25 @@ export async function request<T>(
 }
 export const auth = {
   async session() {
-    if (demoOnly) return { configured: false, authenticated: false, encryptionEnabled: false };
+    if (demoOnly)
+      return {
+        configured: false,
+        authenticated: false,
+        encryptionEnabled: false,
+        onboardingComplete: false,
+      } satisfies Session;
     const s = await request<Session>('/session');
     csrfToken = s.csrfToken ?? '';
+    return s;
+  },
+  async setup(input: SetupInput) {
+    const s = await request<Session>('/setup', 'POST', input);
+    csrfToken = s.csrfToken ?? '';
+    return s;
+  },
+  async completeSetup() {
+    const s = await request<Session>('/setup/complete', 'POST', {});
+    csrfToken = s.csrfToken ?? csrfToken;
     return s;
   },
   async login(password: string) {

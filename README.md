@@ -54,6 +54,18 @@ docker compose --profile redis up --build -d
 
 Use host `redis`, port `6379` in the connection form. A Redis server on your host can be reached with `host.docker.internal` on Docker Desktop. On Linux, configure the equivalent host gateway or use a shared Docker network.
 
+### Deploying with Coolify
+
+These steps target the current Coolify interface. Coolify releases can change labels and defaults; use the equivalent setting if a label differs.
+
+1. In Coolify, create a **Docker Compose** resource and connect the Git repository containing RESPdeck. Select the branch to deploy and set the base directory to the repository root.
+2. Set the Compose file path to `docker-compose.yml` and configure the resource to expose container port `4310` on the domain assigned by Coolify. Enable HTTPS for that domain.
+3. Add the required environment variables in the resource settings: `RESPDECK_ADMIN_PASSWORD` (at least 12 characters), `RESPDECK_ORIGIN` (the exact public HTTPS origin, e.g. `https://respdeck.example.com`) and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Do not commit these secrets to Git.
+4. Ensure the Compose service's `/data` directory is stored in a persistent volume so SQLite data survives redeployments. Keep a backup of that volume and the encryption key.
+5. Deploy the resource, then check its health endpoint at `https://respdeck.example.com/health` and open the application. Configure Redis connections from the UI.
+
+Do not publish the service directly without HTTPS. Set `RESPDECK_ORIGIN` to the browser-facing origin, not an internal Coolify URL; incorrect origin or cookie settings can prevent sign-in. Back up the persistent data before changing or removing the volume.
+
 ### Development
 
 Requires Node.js **22.22+** or Node.js 24 and pnpm 10.28.2. SQLite is built into Node; Node 22 may print an experimental SQLite warning.

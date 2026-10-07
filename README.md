@@ -58,13 +58,13 @@ Use host `redis`, port `6379` in the connection form. A Redis server on your hos
 
 These steps target Coolify's current Docker Compose interface. Labels may change between Coolify releases.
 
-1. Create an application from the Git repository using the **Docker Compose** build pack. Set **Base Directory** to the repository root and **Docker Compose Location** to `compose.yaml`.
-2. In the `respdeck` service's **Domains** field, enter `https://respdeck.example.com:4310` (replace the hostname with your domain). The `:4310` suffix tells Coolify's proxy which internal container port to route to. For Coolify proxy access, the service must listen on the container network interface and the Compose service must not bind the published port to `127.0.0.1`. This repository's default `compose.yaml` binds to localhost; change the port mapping to `4310:4310` for Coolify deployment, then redeploy.
-3. Set `RESPDECK_ADMIN_PASSWORD` to a strong password of at least 12 characters, `RESPDECK_ORIGIN` to the exact public origin without a port (for example `https://respdeck.example.com`), and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Keep these values in Coolify's environment settings, not in Git.
-4. Keep the `respdeck-data` named volume persistent; it stores application data under `/app/data`. Back up the volume and encryption key.
+1. Create an application from the Git repository using the **Dockerfile** build pack. Set **Base Directory** to the repository root.
+2. Set the container port to `4310` and assign your domain in Coolify. The API listens on `0.0.0.0:4310` and the image health check uses `/health`.
+3. Set `RESPDECK_ADMIN_PASSWORD` to a strong password of at least 12 characters, `RESPDECK_ORIGIN` to the exact public origin (for example `https://respdeck.example.com`), and `COOKIE_SECURE=true`. Optionally set `RESPDECK_ENCRYPTION_KEY` to a generated 32-byte key (`openssl rand -base64 32`). Keep these values in Coolify's environment settings, not in Git.
+4. Persist `/app/data` using a Coolify persistent storage mount. The runtime runs as the unprivileged `node` user, so ensure the mounted directory is writable by that user (UID 1000). Do not mount a root-owned, non-writable directory there.
 5. Deploy, then verify `https://respdeck.example.com/health` and sign in to the application.
 
-Do not expose the service without HTTPS. `RESPDECK_ORIGIN` must match the browser-facing origin; incorrect origin or cookie settings can prevent sign-in. Do not remove the data volume without a backup.
+Do not expose the service without HTTPS. `RESPDECK_ORIGIN` must match the browser-facing origin; incorrect origin or cookie settings can prevent sign-in. Back up the persistent data volume and encryption key before removing or replacing storage.
 
 ### Development
 

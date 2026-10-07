@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { buildApp } from './app.js';
 const { app } = await buildApp({
-  dataDir: resolve(process.env.DATA_DIR ?? '../../data'),
+  dataDir: resolve(process.env.DATA_DIR ?? '/app/data'),
   password: process.env.RESPDECK_ADMIN_PASSWORD || undefined,
   encryptionKey: process.env.RESPDECK_ENCRYPTION_KEY || undefined,
   origin: process.env.RESPDECK_ORIGIN || undefined,
